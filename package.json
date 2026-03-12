@@ -1,0 +1,63 @@
+{
+  "name": "bmad-visio",
+  "version": "0.1.0",
+  "description": "Visualize BMAD Method epics & user stories with AI-powered git commit matching",
+  "type": "module",
+  "main": "dist/cli.js",
+  "bin": {
+    "bmad-visio": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js"
+  },
+  "keywords": [
+    "bmad",
+    "dashboard",
+    "agile",
+    "user-stories",
+    "kanban",
+    "project-management",
+    "transformers-js",
+    "embeddings",
+    "git",
+    "commit-matching",
+    "visualization",
+    "BMAD METHOD",
+    "AI"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/bmad-visio"
+  },
+  "author": "William Mesiti",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2",
+    "mdast-util-to-string": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "simple-git": "^3.33.0",
+    "unified": "^11.0.5"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^3.8.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.2",
+    "@types/node": "^22.15.17",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
