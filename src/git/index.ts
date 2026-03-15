@@ -125,10 +125,10 @@ async function checkTransformers(): Promise<boolean> {
 
 async function getEmbedFn(): Promise<EmbedFn> {
   if (_embedFn) return _embedFn;
-  console.log("  🤖  Loading embedding model...");
+  console.log("  Loading embedding model...");
   const { pipeline } = await import("@huggingface/transformers");
-  const extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
-  console.log("  ✅  Embedding model loaded");
+  const extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", { dtype: "fp32" });
+  console.log("  Embedding model loaded");
 
   _embedFn = async (texts: string[]): Promise<number[][]> => {
     const results: number[][] = [];
@@ -144,13 +144,14 @@ async function getEmbedFn(): Promise<EmbedFn> {
 
 async function getClassifyFn(): Promise<ClassifyFn> {
   if (_classifyFn) return _classifyFn;
-  console.log("  🧠  Loading zero-shot classifier for re-ranking...");
+  console.log("  Loading zero-shot classifier for re-ranking...");
   const { pipeline } = await import("@huggingface/transformers");
   const classifier = await pipeline(
     "zero-shot-classification",
-    "Xenova/mobilebert-uncased-mnli"
+    "Xenova/mobilebert-uncased-mnli",
+    { dtype: "fp32" }
   );
-  console.log("  ✅  Classifier loaded");
+  console.log("  Classifier loaded");
 
   _classifyFn = async (text: string, labels: string[]): Promise<{ label: string; score: number }[]> => {
     const result = await classifier(text, labels, { multi_label: true }) as any;
@@ -206,7 +207,7 @@ export async function matchCommitsToStories(
       files: (entry.diff?.files?.map((f: any) => f.file) ?? []),
     }));
   } catch {
-    console.log("  ⚠️  Not a git repository or git not available");
+    console.log("  Not a git repository or git not available");
     return [];
   }
   if (commits.length === 0) return [];
@@ -215,14 +216,14 @@ export async function matchCommitsToStories(
   const gitmap = loadGitMap(projectDir);
   const newCommits = commits.filter((c) => !gitmap.mappings[c.sha]);
   if (newCommits.length === 0) {
-    console.log("  📋  All commits already mapped");
+    console.log("  All commits already mapped");
     return Object.values(gitmap.mappings);
   }
   if (opts?.skipEmbedding) return Object.values(gitmap.mappings);
 
   // Check if @huggingface/transformers is installed (it's an optional dep)
   if (!(await checkTransformers())) {
-    console.log("  ⚠️  @huggingface/transformers not installed — run: npm install @huggingface/transformers");
+    console.log("  @huggingface/transformers not installed — run: npm install @huggingface/transformers");
     console.log("     Skipping AI commit matching. Dashboard will work without it.");
     return Object.values(gitmap.mappings);
   }
@@ -237,10 +238,10 @@ export async function matchCommitsToStories(
   const storyLabels = allStories.map((s) => storyLabel(s));
   const storyTokens = storyTexts.map((t) => tokenize(t));
 
-  console.log(`  📝  Embedding ${storyTexts.length} stories...`);
+  console.log(`  Embedding ${storyTexts.length} stories...`);
   const storyVecs = await embed(storyTexts);
 
-  console.log(`  🔗  Matching ${newCommits.length} new commits...`);
+  console.log(`  Matching ${newCommits.length} new commits...`);
   const commitTexts = newCommits.map((c) => commitEmbedText(c.message, c.body, c.files));
   const commitVectors = await embed(commitTexts);
 
@@ -301,7 +302,7 @@ export async function matchCommitsToStories(
   const ambiguous = allCandidates.filter((cc) => cc.needsRerank);
 
   if (ambiguous.length > 0) {
-    console.log(`  🧠  Re-ranking ${ambiguous.length}/${newCommits.length} ambiguous commits with NLI...`);
+    console.log(`  Re-ranking ${ambiguous.length}/${newCommits.length} ambiguous commits with NLI...`);
     const classify = await getClassifyFn();
 
     for (const cc of ambiguous) {
@@ -323,7 +324,7 @@ export async function matchCommitsToStories(
           c.nliScore = nliResult?.score ?? 0;
         }
       } catch (err: any) {
-        console.log(`  ⚠️  NLI failed for "${cc.commit.message.slice(0, 40)}": ${err.message}`);
+        console.log(`  NLI failed for "${cc.commit.message.slice(0, 40)}": ${err.message}`);
         // Fall back — NLI scores stay at 0, embedding carries full weight
       }
 
@@ -338,7 +339,7 @@ export async function matchCommitsToStories(
       cc.candidates.sort((a, b) => b.finalScore - a.finalScore);
     }
   } else {
-    console.log(`  ⏭️  All matches confident, NLI re-ranking skipped`);
+    console.log(`  All matches confident, NLI re-ranking skipped`);
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -364,7 +365,7 @@ export async function matchCommitsToStories(
   const allMappings = Object.values(gitmap.mappings);
   const matched = allMappings.filter((m) => m.storyId !== null).length;
   const reranked = ambiguous.length;
-  console.log(`  ✅  ${matched}/${allMappings.length} commits matched (${reranked} re-ranked by NLI)`);
+  console.log(`  ${matched}/${allMappings.length} commits matched (${reranked} re-ranked by NLI)`);
 
   return allMappings;
 }

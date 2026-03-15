@@ -13,9 +13,13 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
+    "dev:server": "tsx src/cli.ts",
+    "dev:client": "vite",
+    "dev": "concurrently --names \"server,client\" -c \"blue,green\" \"npm run dev:server\" \"npm run dev:client\"",
+    "build:server": "tsc",
+    "build:client": "vite build",
+    "build": "npm run build:server && npm run build:client",
     "prepublishOnly": "npm run build",
-    "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js"
   },
   "keywords": [
@@ -41,12 +45,18 @@
   "license": "MIT",
   "dependencies": {
     "express": "^4.21.2",
+    "highlight.js": "^11.11.1",
+    "marked": "^17.0.4",
+    "marked-highlight": "^2.2.3",
     "mdast-util-to-string": "^4.0.0",
+    "pinia": "^3.0.4",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
     "remark-stringify": "^11.0.0",
     "simple-git": "^3.33.0",
-    "unified": "^11.0.5"
+    "unified": "^11.0.5",
+    "vue": "^3.5.30",
+    "vue-router": "^5.0.3"
   },
   "optionalDependencies": {
     "@huggingface/transformers": "^3.8.1"
@@ -54,8 +64,12 @@
   "devDependencies": {
     "@types/express": "^5.0.2",
     "@types/node": "^22.15.17",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "@vue/tsconfig": "^0.9.0",
+    "concurrently": "^9.2.1",
     "tsx": "^4.19.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vite": "^8.0.0"
   },
   "engines": {
     "node": ">=18.0.0"

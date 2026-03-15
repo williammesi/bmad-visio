@@ -1,0 +1,42 @@
+/* ─── CSS Variables ─── */
+:root {
+  --bg-0: #08090c;
+  --bg-1: #0e1015;
+  --bg-2: #151820;
+  --bg-3: #1c2029;
+  --border: #252a35;
+  --border-hover: #3a4155;
+  --text-0: #f0f2f5;
+  --text-1: #c1c7d4;
+  --text-2: #7c849a;
+  --text-3: #4a5168;
+  --accent: #6c8cff;
+  --accent-dim: #6c8cff22;
+  --done: #34d399;
+  --done-bg: #34d39915;
+  --active: #fbbf24;
+  --active-bg: #fbbf2415;
+  --review: #a78bfa;
+  --review-bg: #a78bfa15;
+  --todo: #64748b;
+  --todo-bg: #64748b12;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --font-display: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* ─── Base Reset ─── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-display);
+  background: var(--bg-0);
+  color: var(--text-1);
+  line-height: 1.55;
+  min-height: 100vh;
+}
