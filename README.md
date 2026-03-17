@@ -2,6 +2,8 @@
 
 Visualize [BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD) epics and user stories from structured `.md` files on a localhost dashboard. Optionally uses local AI (Transformers.js) to match git commits to stories.
 
+[Screenshots](#screenshots)
+
 ## Quick Start
 
 ```bash
@@ -67,3 +69,23 @@ Options:
 ## License
 
 MIT
+
+## Screenshots
+
+### Overview
+
+The epic overview grid shows all epics with story counts and progress bars at a glance.
+
+![Overview](screenshots/OVERVIEW.png)
+
+### Kanban
+
+The kanban board displays stories across four columns: To Do, Active, Ready for Review, and Done. Stories can be dragged between columns.
+
+![Kanban](screenshots/KANBAN.png)
+
+### Story Detail View
+
+The story detail view shows acceptance criteria, tasks with checkboxes, a progress ring, and related git commits.
+
+![Story Detail View](screenshots/STORYDETAILVIEW.png)
