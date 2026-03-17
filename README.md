@@ -49,7 +49,7 @@ Arguments:
   path              Project root (default: .)
 
 Options:
-  -p, --port <n>    Port number (default: 3333)
+  -p, --port <n>    Port number (default: 3334)
   --no-git          Skip git commit matching
   --debug           Dump parsed data as JSON and exit
   -h, --help        Show help
