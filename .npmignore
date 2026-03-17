@@ -2,3 +2,5 @@ src/
 tsconfig.json
 .gitignore
 bmad-visio/
+vite.config.ts
+tsconfig.client.json

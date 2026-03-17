@@ -1,9 +1,12 @@
 import express from "express";
+import path from 'path'
+import { fileURLToPath } from 'url'
+import { existsSync, readFileSync } from 'fs'
 import { updateStoryStatus, toggleAcceptanceCriteria, toggleTask, BOARD_COLUMNS } from "../parser/index.js";
 import type { BmadProject } from "../types/index.js";
 import type { BoardStatus } from "../parser/index.js";
 
-export function createServer(project: BmadProject, port: number) {
+export function createServer(project: BmadProject, port: number, clientPort?: number) {
   const app = express();
   app.use(express.json());
 
@@ -15,6 +18,20 @@ export function createServer(project: BmadProject, port: number) {
     res.json(epic);
   });
   app.get("/api/commits", (_req, res) => res.json(project.commitMappings ?? []));
+
+  app.get("/api/epics/:epicId/stories/:storyId/markdown", (req, res) => {
+    const epic = project.epics.find((e) => e.id === req.params.epicId);
+    if (!epic) return res.status(404).json({ error: "Epic not found" });
+    const story = epic.stories.find((s) => s.id === req.params.storyId);
+    if (!story) return res.status(404).json({ error: "Story not found" });
+    if (!story.sourceFile) return res.status(404).json({ error: "No source file for this story" });
+    try {
+      const content = readFileSync(story.sourceFile, 'utf-8');
+      return res.type('text/plain').send(content);
+    } catch {
+      return res.status(404).json({ error: "File not found" });
+    }
+  });
 
   app.patch("/api/epics/:epicId/stories/:storyId/status", (req, res) => {
     const { epicId, storyId } = req.params;
@@ -46,10 +63,51 @@ export function createServer(project: BmadProject, port: number) {
     res.json({ ok: true });
   });
 
-  app.get("/", (_req, res) => res.send(dashboardHtml(project)));
+  const __dirname = path.dirname(fileURLToPath(import.meta.url))
+  const publicDir = path.join(__dirname, '..', 'public')
+
+  // ─── HTML Injection ───
+  function serveHtml(project: BmadProject): string {
+    const indexPath = path.join(publicDir, 'index.html')
+    const html = readFileSync(indexPath, 'utf-8')
+    const data = JSON.stringify({
+      name: project.name,
+      epics: project.epics,
+      commits: project.commitMappings ?? [],
+    }).replace(/<\/script>/g, '<\\/script>')
+    const script = `<script>window.__INITIAL_DATA__ = ${data};<\/script>`
+    return html.replace('</head>', `${script}</head>`)
+  }
+
+  if (existsSync(publicDir)) {
+    app.use(express.static(publicDir))
+    app.get('*', (_req, res) => {
+      res.setHeader('Content-Type', 'text/html')
+      res.send(serveHtml(project))
+    })
+  } else {
+    app.get('/', (_req, res) => {
+      if (clientPort) {
+        res.redirect(`http://localhost:${clientPort}`);
+      } else {
+        res.status(503).send('Build not found. Run "npm run build" or use "npm run dev" to start the Vite dev server.');
+      }
+    });
+    app.get('*', (_req, res) => {
+      if (clientPort) {
+        res.redirect(`http://localhost:${clientPort}`);
+      } else {
+        res.status(503).send('Build not found.');
+      }
+    });
+  }
 
   const server = app.listen(port, () => {
-    console.log(`\n  🚀  BMAD Dashboard running at http://localhost:${port}\n`);
+    const displayUrl = clientPort ? `http://localhost:${clientPort}` : `http://localhost:${port}`;
+    console.log(`\n  BMAD Dashboard running at ${displayUrl}\n`);
+    if (clientPort) {
+      console.log(`  API server running at http://localhost:${port}\n`);
+    }
   });
   return server;
 }
@@ -208,12 +266,12 @@ async function moveStory(eId,sId,status){
 async function toggleAC(eId,sId,acIdx,done){
   if(await apiPatch('/api/epics/'+encodeURIComponent(eId)+'/stories/'+encodeURIComponent(sId)+'/ac/'+acIdx,{done})){
     const epic=PROJECT.epics.find(e=>e.id===eId);const story=epic?.stories.find(s=>s.id===sId);
-    const ac=story?.acceptanceCriteria.find(a=>a.id==='AC-'+acIdx);if(ac)ac.done=done;showToast('AC-'+acIdx+(done?' ✓':' ○'),'success');return true}return false}
+    const ac=story?.acceptanceCriteria.find(a=>a.id==='AC-'+acIdx);if(ac)ac.done=done;showToast('AC-'+acIdx+(done?' [done]':' [ ]'),'success');return true}return false}
 async function toggleTaskFn(eId,sId,taskId,done){
   if(await apiPatch('/api/epics/'+encodeURIComponent(eId)+'/stories/'+encodeURIComponent(sId)+'/task/'+encodeURIComponent(taskId),{done})){
     const epic=PROJECT.epics.find(e=>e.id===eId);const story=epic?.stories.find(s=>s.id===sId);
     if(story){for(const t of story.tasks){if(t.id===taskId){t.done=done;break}if(t.subtasks){const sub=t.subtasks.find(s=>s.id===taskId);if(sub){sub.done=done;break}}}}
-    showToast(taskId+(done?' ✓':' ○'),'success');return true}return false}
+    showToast(taskId+(done?' [done]':' [ ]'),'success');return true}return false}
 
 function navigate(hash){window.location.hash=hash}
 function route(){
@@ -288,14 +346,14 @@ function renderStoryDetail(epic,story){
 
   (story.description?'<div class="story-section"><h2>User Story</h2><div class="story-user-story">'+story.description+'</div></div>':'')+
 
-  (story.acceptanceCriteria.length>0?'<div class="story-section"><h2>Acceptance Criteria</h2><table class="ac-table">'+story.acceptanceCriteria.map((ac,i)=>'<tr onclick="onToggleAC(\\''+epic.id+'\\',\\''+story.id+'\\','+(i+1)+','+!ac.done+')"><td class="ac-idx">'+(i+1)+'</td><td class="ac-status">'+(ac.done?'<span style="color:var(--done)">✓</span>':'<span style="color:var(--text-3)">○</span>')+'</td><td class="ac-text'+(ac.done?' is-done':'')+'">'+ac.description+'</td></tr>').join('')+'</table></div>':'')+
+  (story.acceptanceCriteria.length>0?'<div class="story-section"><h2>Acceptance Criteria</h2><table class="ac-table">'+story.acceptanceCriteria.map((ac,i)=>'<tr onclick="onToggleAC(\\''+epic.id+'\\',\\''+story.id+'\\','+(i+1)+','+!ac.done+')"><td class="ac-idx">'+(i+1)+'</td><td class="ac-status">'+(ac.done?'<span style="color:var(--done)">&#10003;</span>':'<span style="color:var(--text-3)">&#9675;</span>')+'</td><td class="ac-text'+(ac.done?' is-done':'')+'">'+ac.description+'</td></tr>').join('')+'</table></div>':'')+
 
   (story.tasks.length>0?'<div class="story-section"><h2>Tasks ('+tp.done+'/'+tp.total+')</h2><ul class="task-list">'+story.tasks.map(t=>{
-    const check=t.done?'<span style="color:var(--done)">✓</span>':'<span style="color:var(--text-3)">○</span>';
+    const check=t.done?'<span style="color:var(--done)">&#10003;</span>':'<span style="color:var(--text-3)">&#9675;</span>';
     let html='<li class="task-item" onclick="onToggleTask(\\''+epic.id+'\\',\\''+story.id+'\\',\\''+t.id+'\\','+!t.done+')"><span class="task-check">'+check+'</span><span class="task-text'+(t.done?' is-done':'')+'">'+t.description+'</span></li>';
     if(t.subtasks&&t.subtasks.length>0){
       html+='<li><div class="subtask-list">'+t.subtasks.map(s=>{
-        const sc=s.done?'<span style="color:var(--done)">✓</span>':'<span style="color:var(--text-3)">○</span>';
+        const sc=s.done?'<span style="color:var(--done)">&#10003;</span>':'<span style="color:var(--text-3)">&#9675;</span>';
         return '<div class="subtask-item" onclick="onToggleTask(\\''+epic.id+'\\',\\''+story.id+'\\',\\''+s.id+'\\','+!s.done+')" style="cursor:pointer"><span>'+sc+'</span><span class="'+(s.done?'is-done':'')+'">'+s.description+'</span></div>'
       }).join('')+'</div></li>'}
     return html}).join('')+'</ul></div>':'')+
