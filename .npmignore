@@ -4,3 +4,4 @@ tsconfig.json
 bmad-visio/
 vite.config.ts
 tsconfig.client.json
+.claude/

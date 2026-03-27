@@ -26,4 +26,17 @@ if (raw) {
     .catch((err) => console.error('[bmad] Failed to fetch project data:', err))
 }
 
+// ─── Realtime Updates ───
+function connectSSE() {
+  const es = new EventSource('/api/updates')
+  es.onmessage = (event) => {
+    try {
+      store.setProject(JSON.parse(event.data))
+    } catch (err) {
+      console.error('[bmad] SSE parse error:', err)
+    }
+  }
+}
+connectSSE()
+
 app.mount('#app')
