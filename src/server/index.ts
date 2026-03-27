@@ -6,7 +6,7 @@ import { updateStoryStatus, toggleAcceptanceCriteria, toggleTask, BOARD_COLUMNS 
 import type { BmadProject } from "../types/index.js";
 import type { BoardStatus } from "../parser/index.js";
 
-export function createServer(project: BmadProject, port: number, clientPort?: number) {
+export function createServer(project: BmadProject, port: number, devSrcDir?: string) {
   const app = express();
   app.use(express.json());
 
@@ -85,31 +85,30 @@ export function createServer(project: BmadProject, port: number, clientPort?: nu
       res.setHeader('Content-Type', 'text/html')
       res.send(serveHtml(project))
     })
-  } else {
-    app.get('/', (_req, res) => {
-      if (clientPort) {
-        res.redirect(`http://localhost:${clientPort}`);
-      } else {
-        res.status(503).send('Build not found. Run "npm run build" or use "npm run dev" to start the Vite dev server.');
-      }
+    app.listen(port, () => {
+      console.log(`\n  BMAD Dashboard running at http://localhost:${port}\n`);
     });
-    app.get('*', (_req, res) => {
-      if (clientPort) {
-        res.redirect(`http://localhost:${clientPort}`);
-      } else {
-        res.status(503).send('Build not found.');
-      }
+  } else if (devSrcDir) {
+    // Dev mode: mount Vite as middleware so everything is on one port
+    const clientRoot = path.join(devSrcDir, 'client')
+    import('vite').then(({ createServer: createVite }) =>
+      createVite({
+        root: clientRoot,
+        server: { middlewareMode: true },
+        appType: 'spa',
+      })
+    ).then((vite) => {
+      app.use(vite.middlewares)
+      app.listen(port, () => {
+        console.log(`\n  BMAD Dashboard running at http://localhost:${port}\n`);
+      });
+    });
+  } else {
+    app.listen(port, () => {
+      console.log(`\n  BMAD Dashboard running at http://localhost:${port}\n`);
+      console.log(`  Build not found. Run "npm run build" first.\n`);
     });
   }
-
-  const server = app.listen(port, () => {
-    const displayUrl = clientPort ? `http://localhost:${clientPort}` : `http://localhost:${port}`;
-    console.log(`\n  BMAD Dashboard running at ${displayUrl}\n`);
-    if (clientPort) {
-      console.log(`  API server running at http://localhost:${port}\n`);
-    }
-  });
-  return server;
 }
 
 function dashboardHtml(project: BmadProject): string {

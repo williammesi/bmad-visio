@@ -34,13 +34,11 @@ if (args.includes("--help") || args.includes("-h")) {
 
 const portIdx = args.findIndex((a) => a === "-p" || a === "--port");
 const port = portIdx !== -1 ? parseInt(args[portIdx + 1], 10) : 3334;
-const clientPortIdx = args.findIndex((a) => a === "--client-port");
-const clientPort = clientPortIdx !== -1 ? parseInt(args[clientPortIdx + 1], 10) : 5173;
 const debug = args.includes("--debug");
 const noGit = args.includes("--no-git");
 
 const __cliDirname = path.dirname(fileURLToPath(import.meta.url));
-const publicDir = path.join(__cliDirname, "..", "public");
+const publicDir = path.join(__cliDirname, "public");
 const isDev = !existsSync(publicDir);
 
 const dir = path.resolve(
@@ -71,4 +69,4 @@ if (!noGit) {
   console.log("  Git matching skipped (--no-git)");
 }
 
-createServer(project, port, isDev ? clientPort : undefined);
+createServer(project, port, isDev ? __cliDirname : undefined);
