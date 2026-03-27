@@ -2,13 +2,30 @@ import express from "express";
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync, readFileSync } from 'fs'
-import { updateStoryStatus, toggleAcceptanceCriteria, toggleTask, BOARD_COLUMNS } from "../parser/index.js";
+import { parseBmadProject, updateStoryStatus, toggleAcceptanceCriteria, toggleTask, BOARD_COLUMNS } from "../parser/index.js";
 import type { BmadProject } from "../types/index.js";
 import type { BoardStatus } from "../parser/index.js";
 
-export function createServer(project: BmadProject, port: number, devSrcDir?: string) {
+export function createServer(project: BmadProject, port: number, devSrcDir?: string, projectDir?: string) {
   const app = express();
   app.use(express.json());
+
+  const sseClients = new Set<express.Response>()
+
+  app.get('/api/updates', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.setHeader('X-Accel-Buffering', 'no')
+    res.flushHeaders()
+
+    const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 25_000)
+    sseClients.add(res)
+    req.on('close', () => {
+      clearInterval(heartbeat)
+      sseClients.delete(res)
+    })
+  })
 
   app.get("/api/project", (_req, res) => res.json(project));
   app.get("/api/epics", (_req, res) => res.json(project.epics));
@@ -79,6 +96,45 @@ export function createServer(project: BmadProject, port: number, devSrcDir?: str
     return html.replace('</head>', `${script}</head>`)
   }
 
+  function broadcast(data: object) {
+    const payload = `data: ${JSON.stringify(data)}\n\n`
+    for (const client of sseClients) {
+      client.write(payload)
+    }
+  }
+
+  if (projectDir) {
+    import('chokidar').then(({ watch }) => {
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+      const watcher = watch(projectDir, {
+        ignored: /(^|[/\\])(\.|node_modules)/,
+        persistent: true,
+        ignoreInitial: true,
+      })
+
+      const handleChange = (changedPath: string) => {
+        if (!changedPath.endsWith('.md')) return
+        if (debounceTimer) clearTimeout(debounceTimer)
+        debounceTimer = setTimeout(() => {
+          try {
+            const updated = parseBmadProject({ dir: projectDir })
+            updated.commitMappings = project.commitMappings
+            Object.assign(project, updated)
+            broadcast({ name: project.name, epics: project.epics, commits: project.commitMappings ?? [] })
+            console.log(`  [watch] Updated after change in ${changedPath}`)
+          } catch (err: any) {
+            console.error(`  [watch] Re-parse failed: ${err.message}`)
+          }
+        }, 300)
+      }
+
+      watcher.on('add', handleChange)
+      watcher.on('change', handleChange)
+      watcher.on('unlink', handleChange)
+    })
+  }
+
   if (existsSync(publicDir)) {
     app.use(express.static(publicDir))
     app.get('*', (_req, res) => {
@@ -91,9 +147,11 @@ export function createServer(project: BmadProject, port: number, devSrcDir?: str
   } else if (devSrcDir) {
     // Dev mode: mount Vite as middleware so everything is on one port
     const clientRoot = path.join(devSrcDir, 'client')
+    const configFile = path.join(devSrcDir, '..', 'vite.config.ts')
     import('vite').then(({ createServer: createVite }) =>
       createVite({
         root: clientRoot,
+        configFile,
         server: { middlewareMode: true },
         appType: 'spa',
       })

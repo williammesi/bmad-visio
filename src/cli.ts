@@ -69,4 +69,4 @@ if (!noGit) {
   console.log("  Git matching skipped (--no-git)");
 }
 
-createServer(project, port, isDev ? __cliDirname : undefined);
+createServer(project, port, isDev ? __cliDirname : undefined, dir);
