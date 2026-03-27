@@ -1,11 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
-import { simpleGit } from "simple-git";
+import { simpleGit, type SimpleGit } from "simple-git";
 import type { BmadProject, CommitMapping, UserStory } from "../types/index.js";
+import { extractCommitSignals, extractPathsFromStoryText } from "./extractor.js";
+
+export const CURRENT_PIPELINE_VERSION = "3.0.0";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
-interface GitMapFile {
+export interface GitMapFile {
   version: 2;
   mappings: Record<string, CommitMapping>;
 }
@@ -22,8 +25,10 @@ interface Candidate {
   storyId: string;
   embeddingScore: number;
   idBoost: number;
-  keywordScore: number;
+  keywordScore: number;   // Jaccard on text tokens (unchanged)
+  pathOverlapScore: number; // NEW: Jaccard on file path tokens (tracked separately)
   nliScore: number;
+  diffSignal: number;
   finalScore: number;
 }
 
@@ -61,11 +66,9 @@ function storyEmbedText(story: UserStory): string {
   return parts.join(" — ").slice(0, 500);
 }
 
-/** Short label for zero-shot NLI — just title + story text */
+/** Short label for zero-shot NLI — just title */
 function storyLabel(story: UserStory): string {
-  const parts = [story.title];
-  if (story.description) parts.push(story.description.split("\n")[0]);
-  return parts.join(": ").slice(0, 150);
+  return `This commit implements ${story.title}`;
 }
 
 function commitEmbedText(message: string, body: string, files: string[]): string {
@@ -82,25 +85,42 @@ function commitNliText(message: string, body: string): string {
   return parts.join(". ").slice(0, 200);
 }
 
+async function extractDiffPlusLines(sha: string, git: SimpleGit): Promise<string> {
+  try {
+    const raw = await git.raw(['show', '--format=', '-U0', sha]);
+    const lines = raw.split('\n').filter((l: string) => l.startsWith('+') && !l.startsWith('+++'));
+    return lines.join(' ').slice(0, 300);
+  } catch {
+    return '';
+  }
+}
+
 // ─── Gitmap file I/O ────────────────────────────────────────────────
 
 function getGitMapPath(projectDir: string): string {
   return path.join(projectDir, "bmad-visio", "gitmap.json");
 }
 
-function loadGitMap(projectDir: string): GitMapFile {
+export function loadGitMap(projectDir: string): GitMapFile {
   const p = getGitMapPath(projectDir);
   if (fs.existsSync(p)) {
     try {
       const data = JSON.parse(fs.readFileSync(p, "utf-8"));
       if (data.version === 1) return { version: 2, mappings: data.mappings ?? {} };
+      // Drop entries from old pipeline versions
+      for (const [sha, entry] of Object.entries(data.mappings ?? {})) {
+        if ((entry as any).pipeline_version !== CURRENT_PIPELINE_VERSION) {
+          console.log(`  Dropping stale cache entry ${sha} (pipeline_version mismatch)`);
+          delete data.mappings[sha];
+        }
+      }
       return data;
     } catch { /* corrupted */ }
   }
   return { version: 2, mappings: {} };
 }
 
-function saveGitMap(projectDir: string, gitmap: GitMapFile): void {
+export function saveGitMap(projectDir: string, gitmap: GitMapFile): void {
   const p = getGitMapPath(projectDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, JSON.stringify({ version: 2, mappings: gitmap.mappings }, null, 2), "utf-8");
@@ -127,7 +147,7 @@ async function getEmbedFn(): Promise<EmbedFn> {
   if (_embedFn) return _embedFn;
   console.log("  Loading embedding model...");
   const { pipeline } = await import("@huggingface/transformers");
-  const extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", { dtype: "fp32" });
+  const extractor = await pipeline("feature-extraction", "Xenova/bge-small-en-v1.5", { dtype: "q8" });
   console.log("  Embedding model loaded");
 
   _embedFn = async (texts: string[]): Promise<number[][]> => {
@@ -148,8 +168,8 @@ async function getClassifyFn(): Promise<ClassifyFn> {
   const { pipeline } = await import("@huggingface/transformers");
   const classifier = await pipeline(
     "zero-shot-classification",
-    "Xenova/mobilebert-uncased-mnli",
-    { dtype: "fp32" }
+    "Xenova/nli-deberta-v3-small",
+    { dtype: "q8" }
   );
   console.log("  Classifier loaded");
 
@@ -177,10 +197,11 @@ const WEIGHTS = {
   embedding:  0.35,
   keyword:    0.15,
   idBoost:    0.20,  // only when an ID is detected
-  nli:        0.30,
+  nli:        0.25,
+  diffSignal: 0.05,
 };
 
-const MATCH_THRESHOLD = 0.25;     // on the combined scale
+const MATCH_THRESHOLD = 0.38;     // on the combined scale
 const RERANK_TOP_K = 3;           // send top K to the NLI classifier
 const RERANK_AMBIGUITY = 0.12;    // trigger re-rank if gap between #1 and #2 is below this
 const RERANK_CEILING = 0.55;      // always re-rank if top score is below this
@@ -237,13 +258,32 @@ export async function matchCommitsToStories(
   const storyTexts = allStories.map((s) => storyEmbedText(s));
   const storyLabels = allStories.map((s) => storyLabel(s));
   const storyTokens = storyTexts.map((t) => tokenize(t));
+  // SIG-06: pre-build path sets for each story (used in per-commit path-overlap scoring)
+  const storyPathSets: Map<string, Set<string>> = new Map(
+    allStories.map((s) => {
+      const storyText = [
+        s.description,
+        ...s.acceptanceCriteria.map((ac) => ac.description),
+      ].join(" ");
+      return [s.id, new Set(extractPathsFromStoryText(storyText))];
+    })
+  );
 
   console.log(`  Embedding ${storyTexts.length} stories...`);
   const storyVecs = await embed(storyTexts);
 
   console.log(`  Matching ${newCommits.length} new commits...`);
-  const commitTexts = newCommits.map((c) => commitEmbedText(c.message, c.body, c.files));
+  // Phase 1: pre-extract signals for all commits (needed for embed text + suppression gate)
+  const allSignals = newCommits.map((c) => extractCommitSignals(c.message, c.body, storyIdSet));
+  // SIG-07: Use clean embed text (stopword-stripped) instead of raw commitEmbedText
+  const commitTexts = allSignals.map((s) => s.cleanEmbedText);
   const commitVectors = await embed(commitTexts);
+
+  // Diff signal: extract +lines from each new commit's diff
+  console.log(`  Extracting diff +lines for ${newCommits.length} commits...`);
+  const diffTexts: string[] = await Promise.all(
+    newCommits.map((c) => extractDiffPlusLines(c.sha, git))
+  );
 
   // ═══════════════════════════════════════════════════════════════════
   // STAGE 2: Score each commit against all stories (embedding + heuristics)
@@ -258,32 +298,66 @@ export async function matchCommitsToStories(
 
   for (let ci = 0; ci < newCommits.length; ci++) {
     const commit = newCommits[ci];
+
+    // Phase 1: signals already extracted above
+    const signals = allSignals[ci];
+
+    // SIG-03: Suppression gate — skip ML entirely for chore/ci/docs and non-feature informal commits
+    if (signals.isSuppressed) {
+      gitmap.mappings[commit.sha] = {
+        sha: commit.sha,
+        message: commit.message,
+        body: commit.body,
+        files: commit.files,
+        date: commit.date,
+        storyId: null,
+        score: 0,
+        signalBreakdown: { storyIdMatch: 0, typeGate: 0, pathOverlap: 0, keyword: 0, embedding: 0, nli: 0, diffSignal: 0 },
+        pipeline_version: CURRENT_PIPELINE_VERSION,
+      };
+      allCandidates.push({ commit, candidates: [], needsRerank: false });
+      continue;
+    }
+
     const cVec = commitVectors[ci];
     const fullText = `${commit.message} ${commit.body}`;
     const commitTokens = tokenize(fullText);
 
-    // Detect story ID references
-    const referencedIds = new Set<string>();
-    const idPattern = /\b(\d+\.\d+)\b/g;
-    let m;
-    while ((m = idPattern.exec(fullText)) !== null) {
-      if (storyIdSet.has(m[1])) referencedIds.add(m[1]);
-    }
+    // SIG-04: Use broadened story ID extraction from extractor (replaces inline idPattern)
+    const referencedIds = new Set<string>(signals.referencedStoryIds);
 
-    const candidates: Candidate[] = storyIds.map((sid, si) => ({
-      storyId: sid,
-      embeddingScore: dotProduct(cVec, storyVecs[si]),
-      idBoost: referencedIds.has(sid) ? 1.0 : 0.0,
-      keywordScore: jaccardSimilarity(commitTokens, storyTokens[si]),
-      nliScore: 0,    // filled in stage 3
-      finalScore: 0,  // computed after all stages
-    }));
+    const commitPathSet = new Set(signals.pathTokens);
+    const candidates: Candidate[] = storyIds.map((sid, si) => {
+      const storyPathSet = storyPathSets.get(sid) ?? new Set<string>();
+      // SIG-06: path-overlap score (Jaccard on file path tokens)
+      let pathOverlapScore = 0;
+      if (commitPathSet.size > 0 && storyPathSet.size > 0) {
+        let intersection = 0;
+        for (const t of commitPathSet) { if (storyPathSet.has(t)) intersection++; }
+        const union = commitPathSet.size + storyPathSet.size - intersection;
+        pathOverlapScore = intersection / union;
+      }
+      return {
+        storyId: sid,
+        embeddingScore: dotProduct(cVec, storyVecs[si]),
+        idBoost: referencedIds.has(sid) ? 1.0 : 0.0,
+        // keywordScore takes the higher of word-token Jaccard and path-token Jaccard (SIG-06)
+        keywordScore: Math.max(jaccardSimilarity(commitTokens, storyTokens[si]), pathOverlapScore),
+        pathOverlapScore,
+        nliScore: 0,    // filled in stage 3
+        diffSignal: 0,  // filled in stage 2
+        finalScore: 0,  // computed after all stages
+      };
+    });
 
     // Pre-compute score without NLI to determine if re-rank is needed
     for (const c of candidates) {
+      const storyPathArr = storyPathSets.get(c.storyId) ? [...storyPathSets.get(c.storyId)!] : [];
+      c.diffSignal = jaccardSimilarity(tokenize(diffTexts[ci] ?? ''), new Set(storyPathArr));
       c.finalScore = c.embeddingScore * (WEIGHTS.embedding + WEIGHTS.nli) // NLI weight goes to embedding when skipped
         + c.keywordScore * WEIGHTS.keyword
-        + c.idBoost * WEIGHTS.idBoost;
+        + c.idBoost * WEIGHTS.idBoost
+        + c.diffSignal * WEIGHTS.diffSignal;
     }
     candidates.sort((a, b) => b.finalScore - a.finalScore);
 
@@ -334,7 +408,8 @@ export async function matchCommitsToStories(
           c.embeddingScore * WEIGHTS.embedding +
           c.keywordScore * WEIGHTS.keyword +
           c.idBoost * WEIGHTS.idBoost +
-          c.nliScore * WEIGHTS.nli;
+          c.nliScore * WEIGHTS.nli +
+          c.diffSignal * WEIGHTS.diffSignal;
       }
       cc.candidates.sort((a, b) => b.finalScore - a.finalScore);
     }
@@ -346,6 +421,7 @@ export async function matchCommitsToStories(
   // Build final mappings
   // ═══════════════════════════════════════════════════════════════════
   for (const cc of allCandidates) {
+    if (cc.candidates.length === 0) continue; // already written by suppression gate
     const best = cc.candidates[0];
     const score = Math.min(Math.round(best.finalScore * 100) / 100, 1.0);
 
@@ -355,8 +431,18 @@ export async function matchCommitsToStories(
       body: cc.commit.body,
       files: cc.commit.files,
       date: cc.commit.date,
-      storyId: score >= MATCH_THRESHOLD ? best.storyId : null,
+      storyId: best.idBoost === 1.0 || score >= MATCH_THRESHOLD ? best.storyId : null,
       score,
+      signalBreakdown: {
+        storyIdMatch: best.idBoost,
+        typeGate: 0,
+        pathOverlap: best.pathOverlapScore,
+        keyword: best.keywordScore,
+        embedding: best.embeddingScore,
+        nli: best.nliScore,
+        diffSignal: best.diffSignal,
+      },
+      pipeline_version: CURRENT_PIPELINE_VERSION,
     };
   }
 

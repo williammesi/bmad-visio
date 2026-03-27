@@ -13,6 +13,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "test": "vitest run",
     "dev:server": "tsx src/cli.ts",
     "dev:client": "vite",
     "dev": "concurrently --names \"server,client\" -c \"blue,green\" \"npm run dev:server\" \"npm run dev:client\"",
@@ -69,7 +70,8 @@
     "concurrently": "^9.2.1",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
-    "vite": "^8.0.0"
+    "vite": "^8.0.0",
+    "vitest": "^4.1.0"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -1,0 +1,162 @@
+[
+  {
+    "id": "E01",
+    "description": "conventional feat commit matching login story",
+    "commit": { "message": "feat(auth): implement login form", "body": "", "files": ["src/auth/login.ts"] },
+    "expectedStoryId": "1.1",
+    "category": "conventional",
+    "notes": "feat type, auth scope — should reach matching stage; expected to match story 1.1"
+  },
+  {
+    "id": "E02",
+    "description": "conventional fix commit for session handling",
+    "commit": { "message": "fix(session): resolve token expiry bug", "body": "", "files": ["src/auth/session.ts"] },
+    "expectedStoryId": "1.2",
+    "category": "conventional",
+    "notes": "fix type, session scope — should reach matching stage"
+  },
+  {
+    "id": "E03",
+    "description": "conventional refactor commit for API layer",
+    "commit": { "message": "refactor(api): extract request helper utilities", "body": "", "files": ["src/api/helpers.ts"] },
+    "expectedStoryId": "2.1",
+    "category": "conventional",
+    "notes": "refactor type — should reach matching stage"
+  },
+  {
+    "id": "E04",
+    "description": "conventional chore commit — suppressed",
+    "commit": { "message": "chore: update dependencies", "body": "", "files": ["package.json"] },
+    "expectedStoryId": null,
+    "category": "conventional",
+    "notes": "chore type → suppressed, expectedStoryId null"
+  },
+  {
+    "id": "E05",
+    "description": "conventional ci commit — suppressed",
+    "commit": { "message": "ci: add matrix test configuration", "body": "", "files": [".github/workflows/ci.yml"] },
+    "expectedStoryId": null,
+    "category": "conventional",
+    "notes": "ci type → suppressed"
+  },
+  {
+    "id": "E06",
+    "description": "conventional docs commit — suppressed",
+    "commit": { "message": "docs: add API reference section", "body": "", "files": ["docs/api.md"] },
+    "expectedStoryId": null,
+    "category": "conventional",
+    "notes": "docs type → suppressed"
+  },
+  {
+    "id": "E07",
+    "description": "informal FIX keyword commit — login area",
+    "commit": { "message": "FIX login redirect after auth", "body": "", "files": ["src/auth/login.ts"] },
+    "expectedStoryId": "1.1",
+    "category": "informal-keyword",
+    "notes": "FIX keyword — must NOT be suppressed; expected to match story 1.1"
+  },
+  {
+    "id": "E08",
+    "description": "informal TOFIX keyword commit — session area",
+    "commit": { "message": "TOFIX: session cookie not cleared on logout", "body": "", "files": ["src/auth/session.ts"] },
+    "expectedStoryId": "1.2",
+    "category": "informal-keyword",
+    "notes": "TOFIX keyword — must NOT be suppressed"
+  },
+  {
+    "id": "E09",
+    "description": "informal Remaining keyword commit — dashboard work",
+    "commit": { "message": "Remaining dashboard widget layout", "body": "", "files": ["src/dashboard/widgets.ts"] },
+    "expectedStoryId": "2.1",
+    "category": "informal-keyword",
+    "notes": "Remaining keyword — must NOT be suppressed"
+  },
+  {
+    "id": "E10",
+    "description": "informal Investigate keyword commit — performance",
+    "commit": { "message": "Investigate slow query on user list endpoint", "body": "", "files": ["src/api/users.ts"] },
+    "expectedStoryId": "3.1",
+    "category": "informal-keyword",
+    "notes": "Investigate keyword — must NOT be suppressed"
+  },
+  {
+    "id": "E11",
+    "description": "informal Implement keyword commit — notifications",
+    "commit": { "message": "Implement push notification handler", "body": "", "files": ["src/notifications/push.ts"] },
+    "expectedStoryId": "3.2",
+    "category": "informal-keyword",
+    "notes": "Implement keyword — must NOT be suppressed"
+  },
+  {
+    "id": "E12",
+    "description": "story-ID-reference commit with STORY- prefix",
+    "commit": { "message": "Implement login STORY-1.1: add remember-me checkbox", "body": "", "files": ["src/auth/login.ts"] },
+    "expectedStoryId": "1.1",
+    "category": "story-id-reference",
+    "notes": "STORY-1.1 reference → hard gate must assign story 1.1"
+  },
+  {
+    "id": "E13",
+    "description": "story-ID-reference commit with hash prefix",
+    "commit": { "message": "Fix: #3.2 session handling broken after merge", "body": "", "files": ["src/auth/session.ts"] },
+    "expectedStoryId": "3.2",
+    "category": "story-id-reference",
+    "notes": "#3.2 reference → hard gate must assign story 3.2"
+  },
+  {
+    "id": "E14",
+    "description": "story-ID-reference commit with STORY- in body",
+    "commit": { "message": "Add notification badge counter", "body": "Closes STORY-3.2", "files": ["src/notifications/badge.ts"] },
+    "expectedStoryId": "3.2",
+    "category": "story-id-reference",
+    "notes": "STORY-3.2 in body → hard gate assigns story 3.2"
+  },
+  {
+    "id": "E15",
+    "description": "genuine no-match: dark mode toggle feature not in any story",
+    "commit": { "message": "Add dark mode toggle to settings panel", "body": "", "files": ["src/settings/theme.ts"] },
+    "expectedStoryId": null,
+    "category": "no-match",
+    "notes": "Not suppressed, no story ID, but no story covers dark mode — should return null below threshold"
+  },
+  {
+    "id": "E16",
+    "description": "genuine no-match: keyboard shortcut feature not in any story",
+    "commit": { "message": "Add keyboard shortcut overlay for power users", "body": "", "files": ["src/shortcuts/overlay.ts"] },
+    "expectedStoryId": null,
+    "category": "no-match",
+    "notes": "Not suppressed, no story ID, topic not covered by any story"
+  },
+  {
+    "id": "E17",
+    "description": "genuine no-match: printer-friendly CSS feature",
+    "commit": { "message": "Add print stylesheet for report pages", "body": "", "files": ["src/styles/print.css"] },
+    "expectedStoryId": null,
+    "category": "no-match",
+    "notes": "Not suppressed (no conventional type or suppress keyword), but print styling not in stories"
+  },
+  {
+    "id": "E18",
+    "description": "WIP commit — suppressed",
+    "commit": { "message": "WIP: half-finished auth refactor", "body": "", "files": ["src/auth/login.ts"] },
+    "expectedStoryId": null,
+    "category": "informal-keyword",
+    "notes": "WIP keyword → suppressed → null"
+  },
+  {
+    "id": "E19",
+    "description": "TODO commit — suppressed",
+    "commit": { "message": "TODO: wire up forgot-password flow", "body": "", "files": ["src/auth/forgot.ts"] },
+    "expectedStoryId": null,
+    "category": "informal-keyword",
+    "notes": "TODO keyword → suppressed → null"
+  },
+  {
+    "id": "E20",
+    "description": "conventional feat commit for notifications",
+    "commit": { "message": "feat(notifications): add unread badge count", "body": "", "files": ["src/notifications/badge.ts"] },
+    "expectedStoryId": "3.2",
+    "category": "conventional",
+    "notes": "feat type, notifications scope — should reach matching stage"
+  }
+]
