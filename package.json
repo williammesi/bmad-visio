@@ -1,6 +1,6 @@
 {
   "name": "bmad-visio",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Visualize BMAD Method epics & user stories with AI-powered git commit matching",
   "type": "module",
   "main": "dist/cli.js",
