@@ -1,4 +1,5 @@
 # bmad-visio
+*This is an unofficial bmad tool, this is an experimental project that I built for myself and decided to share*
 
 Visualize [BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD) epics and user stories from structured `.md` files on a localhost dashboard. Optionally uses local AI (Transformers.js) to match git commits to stories.
 
