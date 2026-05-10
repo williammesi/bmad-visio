@@ -463,9 +463,10 @@ export function parseBmadProject(opts: ParseOptions): BmadProject {
 
   // Merge standalone stories into parent epics
   for (const story of standaloneStories) {
-    const epicNum = story.id.split(".")[0];
+    const epicNum = parseInt(story.id.split(".")[0], 10).toString();
     const parentEpic = epics.find((e) => {
-      const eNum = e.id.replace(/\D/g, "").replace(/^0+/, "");
+      // Parse as integer to avoid "00" → "" when stripping leading zeros (e.g. EPIC-00 must match epic "0")
+      const eNum = parseInt(e.id.replace(/\D/g, ""), 10).toString();
       return eNum === epicNum;
     });
     if (parentEpic) {
